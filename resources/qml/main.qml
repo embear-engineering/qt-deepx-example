@@ -9,30 +9,71 @@ Window {
     width: 1280
     height: 720
     title: qsTr("DeepX Object Detection (QML)")
+    color: "#f5f5f5"
 
-    RowLayout {
+    ColumnLayout {
         anchors.fill: parent
-        spacing: 10
-        
-        // Dynamic creation of video items based on available streams would be nice,
-        // but for now we can define two slots and hide if not used.
-        
-        VideoStreamItem {
-            id: stream0
-            objectName: "stream0"
+        spacing: 0
+
+        // Header with Logos
+        Rectangle {
             Layout.fillWidth: true
-            Layout.fillHeight: true
-            Layout.preferredWidth: parent.width / 2
-            visible: true // Controlled by C++
+            Layout.preferredHeight: 100
+            color: "white"
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 20
+                anchors.rightMargin: 20
+
+                Image {
+                    source: "qrc:/img/tis-logo.jpg"
+                    Layout.preferredHeight: 80
+                    fillMode: Image.PreserveAspectFit
+                    Layout.alignment: Qt.AlignVCenter | Qt.AlignLeft
+                }
+
+                Item { Layout.fillWidth: true } // Spacer
+
+                Image {
+                    source: "qrc:/img/embear-logo.jpg"
+                    Layout.preferredHeight: 80
+                    fillMode: Image.PreserveAspectFit
+                    Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
+                }
+            }
+
+            // Bottom border for header
+            Rectangle {
+                anchors.bottom: parent.bottom
+                width: parent.width
+                height: 1
+                color: "#e0e0e0"
+            }
         }
 
-        VideoStreamItem {
-            id: stream1
-            objectName: "stream1"
+        // Video Streams
+        RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            Layout.preferredWidth: parent.width / 2
-            visible: false // Controlled by C++
+            spacing: 10
+            Layout.margins: 10
+
+            VideoStreamItem {
+                id: stream0
+                objectName: "stream0"
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                visible: true
+            }
+
+            VideoStreamItem {
+                id: stream1
+                objectName: "stream1"
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                visible: false
+            }
         }
     }
 }
