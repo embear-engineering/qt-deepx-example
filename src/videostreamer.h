@@ -7,6 +7,7 @@
 #include <QWaitCondition>
 #include <mutex>
 #include <vector>
+#include <memory>
 
 #ifdef USE_OPENCV
 #include <opencv2/opencv.hpp>
@@ -31,6 +32,7 @@ struct YoloParam {
 struct OdEstimationArgs {
 #ifdef USE_DXRT
     std::vector<std::vector<BoundingBox>> od_results;
+    Yolo* yolo = nullptr;
 #endif
     std::vector<std::vector<int64_t>> od_output_shape;
     std::mutex lk;
@@ -42,7 +44,11 @@ class VideoStreamer : public QObject
 {
     Q_OBJECT
 public:
+#ifdef USE_DXRT
+    explicit VideoStreamer(int streamId, std::shared_ptr<dxrt::InferenceEngine> ie, const std::string& modelPath, const YoloParam& yoloParam, const std::string& pipeline, QObject *parent = nullptr);
+#else
     explicit VideoStreamer(int streamId, const std::string& modelPath, const YoloParam& yoloParam, const std::string& pipeline, QObject *parent = nullptr);
+#endif
     ~VideoStreamer();
 
     void stop();
@@ -61,9 +67,10 @@ private:
     YoloParam m_yoloParam;
     std::string m_pipeline;
     bool m_stop;
+    int m_displayed_count = 0;
 
 #ifdef USE_DXRT
-    dxrt::InferenceEngine* m_ie;
+    std::shared_ptr<dxrt::InferenceEngine> m_ie;
     Yolo* m_yolo;
 #endif
 

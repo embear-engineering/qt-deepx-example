@@ -10,10 +10,13 @@
 #endif
 #endif
 
+#ifdef USE_DXRT
+VideoStreamer::VideoStreamer(int streamId, std::shared_ptr<dxrt::InferenceEngine> ie, const std::string& modelPath, const YoloParam& yoloParam, const std::string& pipeline, QObject *parent)
+    : QObject(parent), m_streamId(streamId), m_ie(ie), m_modelPath(modelPath), m_yoloParam(yoloParam), m_pipeline(pipeline), m_stop(false)
+      , m_yolo(nullptr)
+#else
 VideoStreamer::VideoStreamer(int streamId, const std::string& modelPath, const YoloParam& yoloParam, const std::string& pipeline, QObject *parent)
     : QObject(parent), m_streamId(streamId), m_modelPath(modelPath), m_yoloParam(yoloParam), m_pipeline(pipeline), m_stop(false)
-#ifdef USE_DXRT
-      , m_ie(nullptr), m_yolo(nullptr)
 #endif
 {
     m_odOutputs.resize(FRAME_BUFFERS);
@@ -26,7 +29,7 @@ VideoStreamer::~VideoStreamer()
 {
     stop();
 #ifdef USE_DXRT
-    if (m_ie) delete m_ie;
+    // m_ie is shared_ptr, no manual delete
     if (m_yolo) delete m_yolo;
 #endif
 }
@@ -40,16 +43,18 @@ void VideoStreamer::process()
 {
     try {
 #ifdef USE_DXRT
-        dxrt::InferenceOption op_od;
-        op_od.devices.push_back(0); 
-
-        m_ie = new dxrt::InferenceEngine(m_modelPath, op_od);
+        if (!m_ie) {
+             emit error("InferenceEngine not initialized");
+             return;
+        }
         
         m_yolo = new Yolo(m_yoloParam);
         if(!m_yolo->LayerReorder(m_ie->GetOutputs())) {
             emit error("Layer reorder failed");
             return;
         }
+        
+        m_odArgs.yolo = m_yolo;
 
         // Setup buffers
         for(int i=0; i<FRAME_BUFFERS; i++) {
@@ -67,29 +72,6 @@ void VideoStreamer::process()
         m_odArgs.od_output_shape = output_shape;
         m_odArgs.od_results = std::vector<std::vector<BoundingBox>>(FRAME_BUFFERS);
 
-        // Callback
-        std::function<int(std::vector<std::shared_ptr<dxrt::Tensor>>, void*)> od_postProcCallBack = 
-                    [&](std::vector<std::shared_ptr<dxrt::Tensor>> outputs, void *arg)
-        {
-            auto arguments = (OdEstimationArgs*)arg;
-            {
-                std::unique_lock<std::mutex> lk(arguments->lk);
-                int index = arguments->od_process_count;
-                if(index >= FRAME_BUFFERS) {
-                    index = index % FRAME_BUFFERS;
-                } else if (index < 0) {
-                    index = 0;
-                }
-
-                auto od_result = m_yolo->PostProc(outputs);
-                arguments->od_results[index] = od_result;
-                arguments->od_process_count = arguments->od_process_count + 1;
-                arguments->frame_idx = arguments->frame_idx + 1;
-            }
-            return 0;
-        };
-
-        m_ie->RegisterCallback(od_postProcCallBack);
 #endif
 
 #ifdef USE_OPENCV
@@ -134,10 +116,9 @@ void VideoStreamer::process()
             // Display Logic
             {
 #ifdef USE_DXRT
-                 static int displayed_count = 0;
                  std::unique_lock<std::mutex> lk(m_odArgs.lk);
-                 if (m_odArgs.od_process_count > displayed_count) {
-                     int display_idx = displayed_count % FRAME_BUFFERS;
+                 if (m_odArgs.od_process_count > m_displayed_count) {
+                     int display_idx = m_displayed_count % FRAME_BUFFERS;
                      
                      if (!m_frames[display_idx].empty()) {
                          cv::Mat displayFrame = m_frames[display_idx].clone();
@@ -149,7 +130,7 @@ void VideoStreamer::process()
                          QImage qimg((const unsigned char*)displayFrame.data, displayFrame.cols, displayFrame.rows, displayFrame.step, QImage::Format_RGB888);
                          emit imageReady(qimg.copy()); 
                      }
-                     displayed_count++;
+                     m_displayed_count++;
                  }
 #else
                  // No DXRT, just display frame
