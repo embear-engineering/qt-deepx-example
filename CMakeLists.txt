@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.14)
 
-project(qt_example)
+project(qt_deepx_example)
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_AUTOUIC ON)
@@ -79,9 +79,9 @@ endif()
 # because it's only used for model input preparation.
 # We also don't need display.cpp (DisplayBoundingBox).
 
-add_executable(qt_example ${SOURCES} ${HEADERS})
+add_executable(qt_deepx_example ${SOURCES} ${HEADERS})
 
-target_link_libraries(qt_example
+target_link_libraries(qt_deepx_example
     Qt5::Core
     Qt5::Gui
     Qt5::Quick
@@ -89,13 +89,13 @@ target_link_libraries(qt_example
 )
 
 if(ENABLE_OPENCV)
-    target_link_libraries(qt_example ${OpenCV_LIBS})
+    target_link_libraries(qt_deepx_example ${OpenCV_LIBS})
 endif()
 
 if(ENABLE_DXRT)
-    target_link_libraries(qt_example dxrt)
+    target_link_libraries(qt_deepx_example dxrt)
 endif()
 
 if(UNIX AND NOT APPLE)
-    target_link_libraries(qt_example pthread)
+    target_link_libraries(qt_deepx_example pthread)
 endif()
