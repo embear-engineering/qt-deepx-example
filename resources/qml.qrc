@@ -2,6 +2,7 @@
     <qresource prefix="/">
         <file>qml/main.qml</file>
         <file>img/tis-logo.jpg</file>
+        <file>img/deepx-logo.jpg</file>
         <file>img/embear-logo.jpg</file>
     </qresource>
 </RCC>

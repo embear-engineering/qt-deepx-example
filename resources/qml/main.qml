@@ -36,6 +36,15 @@ Window {
                 Item { Layout.fillWidth: true } // Spacer
 
                 Image {
+                    source: "qrc:/img/deepx-logo.jpg"
+                    Layout.preferredHeight: 80
+                    fillMode: Image.PreserveAspectFit
+                    Layout.alignment: Qt.AlignVCenter | Qt.AlignHCenter
+                }
+
+                Item { Layout.fillWidth: true } // Spacer
+
+                Image {
                     source: "qrc:/img/embear-logo.jpg"
                     Layout.preferredHeight: 80
                     fillMode: Image.PreserveAspectFit
