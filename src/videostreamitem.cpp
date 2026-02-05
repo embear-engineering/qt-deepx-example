@@ -12,11 +12,20 @@ void VideoStreamItem::paint(QPainter *painter)
 {
     QMutexLocker locker(&m_mutex);
     if (!m_image.isNull()) {
-        QRectF targetRect(0, 0, width(), height());
+        QSize scaledSize = m_image.size();
+        scaledSize.scale(size().toSize(), Qt::KeepAspectRatio);
+
+        QRectF targetRect(
+            (width() - scaledSize.width()) / 2.0,
+            (height() - scaledSize.height()) / 2.0,
+            scaledSize.width(),
+            scaledSize.height()
+        );
+
+        // No fillRect here to keep background transparent/inherited
         painter->drawImage(targetRect, m_image);
     } else {
-        painter->fillRect(0, 0, width(), height(), Qt::black);
-        painter->setPen(Qt::white);
+        painter->setPen(Qt::black);
         painter->drawText(boundingRect(), Qt::AlignCenter, "No Signal");
     }
 }
