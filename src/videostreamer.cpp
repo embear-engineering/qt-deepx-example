@@ -8,6 +8,7 @@
 #ifdef USE_OPENCV
 #include <utils/color_table.hpp>
 #endif
+#include <dxrt/exception/exception.h>
 #endif
 
 #ifdef USE_DXRT
@@ -167,6 +168,8 @@ void VideoStreamer::process()
         }
 #endif
 
+    } catch (const dxrt::Exception& e) {
+        emit error(QString::fromStdString(e.what()));
     } catch (const std::exception& e) {
         emit error(QString::fromStdString(e.what()));
     }
