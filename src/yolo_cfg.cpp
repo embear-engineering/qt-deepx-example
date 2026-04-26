@@ -175,6 +175,9 @@ YoloParam yolov7_512 = {
 };
 
 // YOLOv8 configuration for 640x640 input resolution - anchor-free detection with classification-free head (YoloV8N.dxnn)
+// The model produces 6 per-scale outputs (decoupled head): cv2 (DFL box regression, 64ch) and cv3 (class scores, 80ch)
+// at three feature map scales: 80x80 (stride 8), 40x40 (stride 16), 20x20 (stride 32).
+// Layers are ordered as [cv2.0, cv3.0, cv2.1, cv3.1, cv2.2, cv3.2] (DFL, class pairs per scale).
 YoloParam yolov8_640 = {
     640,
     640,
@@ -185,8 +188,12 @@ YoloParam yolov8_640 = {
     80,
     "output0",
     {
-        createYoloLayerParam("/model.22/Sigmoid_output_0", 80, 8400, 3, {}, {}, { 0 }),
-        createYoloLayerParam("/model.22/dfl/conv/Conv_output_0", 4, 8400, 3, {}, {}, { 1 }),
+        createYoloLayerParam("/model.22/cv2.0/cv2.0.2/Conv_output_0", 80, 80, 0, {}, {}, { 0 }),
+        createYoloLayerParam("/model.22/cv3.0/cv3.0.2/Conv_output_0", 80, 80, 0, {}, {}, { 1 }),
+        createYoloLayerParam("/model.22/cv2.1/cv2.1.2/Conv_output_0", 40, 40, 0, {}, {}, { 2 }),
+        createYoloLayerParam("/model.22/cv3.1/cv3.1.2/Conv_output_0", 40, 40, 0, {}, {}, { 3 }),
+        createYoloLayerParam("/model.22/cv2.2/cv2.2.2/Conv_output_0", 20, 20, 0, {}, {}, { 4 }),
+        createYoloLayerParam("/model.22/cv3.2/cv3.2.2/Conv_output_0", 20, 20, 0, {}, {}, { 5 }),
     },
     { "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "trafficlight", "firehydrant", "stopsign", "parkingmeter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sportsball", "kite", "baseballbat", "baseballglove", "skateboard", "surfboard", "tennisracket", "bottle", "wineglass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange", "broccoli", "carrot", "hotdog", "pizza", "donut", "cake", "chair", "couch", "pottedplant", "bed", "diningtable", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "cellphone", "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddybear", "hairdrier", "toothbrush"},
     PostProcType::YOLOV8

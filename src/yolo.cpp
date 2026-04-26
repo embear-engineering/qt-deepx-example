@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <limits>
 #include <opencv2/opencv.hpp>
 #include <utils/common_util.hpp>
 #include "yolo.h"
@@ -266,68 +267,82 @@ void Yolo::raw_post_processing(dxrt::TensorPtrs &outputs) {
     std::vector<float> box_temp(4);
     if(cfg.postproc_type == PostProcType::YOLOV8)
     {
-        // std::cout << "[ERROR] YOLOv8 mode is not supported." << std::endl;
-        int scores_tensor_idx = cfg.layers[0].tensorIdx[0];
-        int boxes_tensor_idx = cfg.layers[1].tensorIdx[0];
-        float* boxes_output_tensor = static_cast<float*>(outputs[boxes_tensor_idx]->data());
-        float* scores_output_tensor = static_cast<float*>(outputs[scores_tensor_idx]->data());
-        int boxes_pitch_size = outputs[boxes_tensor_idx]->shape()[3];
-        int score_pitch_size = outputs[scores_tensor_idx]->shape()[2];
-        std::vector<int> feature_strides = {8, 16, 32};
-        int index = -1;
-        for(int i=0;i<(int)feature_strides.size();i++)
-        {
-            int stride = feature_strides[i];
-            int numGridX = cfg.width / stride;
-            int numGridY = cfg.height / stride;
-            for(int gY=0; gY<numGridY; gY++)
-            {
-                for(int gX=0; gX<numGridX; gX++)
-                {
-                    index++;
+        // 6-output per-scale decoupled head: 3 DFL box regression tensors (cv2, 64ch) and
+        // 3 class score tensors (cv3, numClasses ch) at scales 80x80, 40x40, 20x20.
+        // LayerReorder re-orders layers to match model output order (not necessarily [reg,cls] pairs),
+        // so classify by channel count and sort by spatial size to get correct [reg,cls] pairs.
+        std::vector<std::pair<int, int>> reg_tensors;  // (spatial_size, tensor_idx)
+        std::vector<std::pair<int, int>> cls_tensors;
+        for (const auto& layer : cfg.layers) {
+            int tidx = layer.tensorIdx[0];
+            if (outputs[tidx]->shape().size() < 4) continue;
+            int ch = outputs[tidx]->shape()[1];
+            int sp = outputs[tidx]->shape()[2] * outputs[tidx]->shape()[3];
+            if (ch == 64) {
+                reg_tensors.emplace_back(sp, tidx);
+            } else if (ch == static_cast<int>(cfg.numClasses)) {
+                cls_tensors.emplace_back(sp, tidx);
+            }
+        }
+        auto sort_desc = [](const std::pair<int,int>& a, const std::pair<int,int>& b) {
+            return a.first > b.first;
+        };
+        std::sort(reg_tensors.begin(), reg_tensors.end(), sort_desc);
+        std::sort(cls_tensors.begin(), cls_tensors.end(), sort_desc);
+
+        for (size_t i = 0; i < 3 && i < reg_tensors.size() && i < cls_tensors.size(); ++i) {
+            int reg_idx = reg_tensors[i].second;
+            int cls_idx = cls_tensors[i].second;
+            const float* reg_data = static_cast<const float*>(outputs[reg_idx]->data());
+            const float* cls_data = static_cast<const float*>(outputs[cls_idx]->data());
+
+            int H = outputs[cls_idx]->shape()[2];
+            int W = outputs[cls_idx]->shape()[3];
+            int stride = cfg.width / W;
+            int num_grid = H * W;
+
+            for (int gh = 0; gh < H; ++gh) {
+                for (int gw = 0; gw < W; ++gw) {
+                    int sp = gh * W + gw;
+
                     int max_cls = -1;
-                    float max_score = cfg.scoreThreshold;
-                    for(int cls=0;cls<static_cast<int>(cfg.numClasses);cls++)
-                    {
-                        float class_score = scores_output_tensor[(cls * score_pitch_size) + index];
-                        if(class_score > max_score)
-                        {
-                            max_cls = cls;
-                            max_score = class_score;
+                    float max_cls_conf = cfg.scoreThreshold;
+                    for (int c = 0; c < static_cast<int>(cfg.numClasses); ++c) {
+                        float conf = cls_data[c * num_grid + sp];
+                        if (conf > max_cls_conf) {
+                            max_cls_conf = conf;
+                            max_cls = c;
                         }
                     }
-                    if(max_cls > -1)
-                    {
-                        ScoreIndices[max_cls].emplace_back(max_score, boxIdx);
-                        std::vector<float> data(4);
-                        float _605output01 = boxes_output_tensor[(0 * boxes_pitch_size) + index];
-                        float _605output02 = boxes_output_tensor[(1 * boxes_pitch_size) + index];
-                        float _608output01 = boxes_output_tensor[(2 * boxes_pitch_size) + index];
-                        float _608output02 = boxes_output_tensor[(3 * boxes_pitch_size) + index];
 
-                        float _605output01_s = (_605output01 * (-1) + (0.5f + gX));
-                        float _605output02_s = (_605output02 * (-1) + (0.5f + gY));
-                        float _608output01_s = (_608output01 + (0.5f + gX));
-                        float _608output02_s = (_608output02 + (0.5f + gY));
+                    if (max_cls != -1) {
+                        // DFL decoding: softmax over 16 bins per coordinate, then weighted sum
+                        float dist[4];
+                        for (int k = 0; k < 4; ++k) {
+                            float max_val = -std::numeric_limits<float>::infinity();
+                            for (int d = 0; d < 16; ++d) {
+                                float v = reg_data[(k * 16 + d) * num_grid + sp];
+                                if (v > max_val) max_val = v;
+                            }
+                            float exp_sum = 0.0f, weighted_sum = 0.0f;
+                            for (int d = 0; d < 16; ++d) {
+                                float e = std::exp(reg_data[(k * 16 + d) * num_grid + sp] - max_val);
+                                exp_sum += e;
+                                weighted_sum += e * static_cast<float>(d);
+                            }
+                            dist[k] = weighted_sum / exp_sum;
+                        }
 
-                        _605output01 = _608output01_s - _605output01_s;
-                        _605output02 = _608output02_s - _605output02_s;
-                        _608output01 = (_608output01_s + _605output01_s) * 0.5; // 613
-                        _608output02 = (_608output02_s + _605output02_s) * 0.5; // 613
-
-                        data[0] = _608output01 * stride;
-                        data[1] = _608output02 * stride;
-                        data[2] = _605output01 * stride;
-                        data[3] = _605output02 * stride;
-                        Boxes[boxIdx*4+0] = data[0] - data[2]/2.f;
-                        Boxes[boxIdx*4+1] = data[1] - data[3]/2.f;
-                        Boxes[boxIdx*4+2] = data[0] + data[2]/2.f;
-                        Boxes[boxIdx*4+3] = data[1] + data[3]/2.f;
+                        float ax = gw + 0.5f, ay = gh + 0.5f;
+                        Boxes[boxIdx * 4 + 0] = (ax - dist[0]) * stride;  // x1
+                        Boxes[boxIdx * 4 + 1] = (ay - dist[1]) * stride;  // y1
+                        Boxes[boxIdx * 4 + 2] = (ax + dist[2]) * stride;  // x2
+                        Boxes[boxIdx * 4 + 3] = (ay + dist[3]) * stride;  // y2
+                        ScoreIndices[max_cls].emplace_back(max_cls_conf, boxIdx);
                         boxIdx++;
                     }
                 }
             }
-
         }
     }
     else if(anchorSize > 0)
