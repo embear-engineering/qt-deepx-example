@@ -11,6 +11,7 @@
 #include "yolo.h"
 // Extern declaration, definition is in yolo_cfg.cpp to ensure correct initialization order
 extern std::vector<YoloParam> yoloParams;
+#include <dxrt/exception/exception.h>
 #endif
 
 int main(int argc, char *argv[])
@@ -85,7 +86,16 @@ int main(int argc, char *argv[])
 #ifdef USE_DXRT
     dxrt::InferenceOption op_od;
     op_od.devices.push_back(0);
-    auto ie = std::make_shared<dxrt::InferenceEngine>(modelPath, op_od);
+    std::shared_ptr<dxrt::InferenceEngine> ie;
+    try {
+        ie = std::make_shared<dxrt::InferenceEngine>(modelPath, op_od);
+    } catch (const dxrt::Exception& e) {
+        std::cerr << "Failed to initialize InferenceEngine: " << e.what() << std::endl;
+        return -1;
+    } catch (const std::exception& e) {
+        std::cerr << "Failed to initialize InferenceEngine: " << e.what() << std::endl;
+        return -1;
+    }
 
     std::function<int(std::vector<std::shared_ptr<dxrt::Tensor>>, void*)> od_postProcCallBack =
                 [](std::vector<std::shared_ptr<dxrt::Tensor>> outputs, void *arg)
