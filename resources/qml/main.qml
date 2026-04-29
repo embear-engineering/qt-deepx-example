@@ -9,7 +9,7 @@ Window {
     width: 1280
     height: 720
     title: qsTr("DeepX Object Detection (QML)")
-    color: "#f5f5f5"
+    color: "#222222"
 
     ColumnLayout {
         anchors.fill: parent
@@ -19,36 +19,48 @@ Window {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 100
-            color: "white"
+            color: "#000000"
 
             RowLayout {
                 anchors.fill: parent
                 anchors.leftMargin: 20
                 anchors.rightMargin: 20
+                spacing: 0
 
-                Image {
-                    source: "qrc:/img/tis-logo.jpg"
-                    Layout.preferredHeight: 80
-                    fillMode: Image.PreserveAspectFit
-                    Layout.alignment: Qt.AlignVCenter | Qt.AlignLeft
+                Item {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Image {
+                        anchors.left: parent.left
+                        anchors.verticalCenter: parent.verticalCenter
+                        source: "qrc:/img/avocado-os.jpg"
+                        height: 80
+                        fillMode: Image.PreserveAspectFit
+                    }
                 }
 
-                Item { Layout.fillWidth: true } // Spacer
-
-                Image {
-                    source: "qrc:/img/deepx-logo.jpg"
-                    Layout.preferredHeight: 80
-                    fillMode: Image.PreserveAspectFit
-                    Layout.alignment: Qt.AlignVCenter | Qt.AlignHCenter
+                Item {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Image {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        anchors.verticalCenter: parent.verticalCenter
+                        source: "qrc:/img/deepx-logo.jpg"
+                        height: 80
+                        fillMode: Image.PreserveAspectFit
+                    }
                 }
 
-                Item { Layout.fillWidth: true } // Spacer
-
-                Image {
-                    source: "qrc:/img/embear-logo.jpg"
-                    Layout.preferredHeight: 80
-                    fillMode: Image.PreserveAspectFit
-                    Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
+                Item {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Image {
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        source: "qrc:/img/grinn.jpg"
+                        height: 80
+                        fillMode: Image.PreserveAspectFit
+                    }
                 }
             }
 

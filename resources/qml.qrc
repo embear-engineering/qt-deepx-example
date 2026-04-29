@@ -1,8 +1,8 @@
 <RCC>
     <qresource prefix="/">
         <file>qml/main.qml</file>
-        <file>img/tis-logo.jpg</file>
+        <file>img/avocado-os.jpg</file>
         <file>img/deepx-logo.jpg</file>
-        <file>img/embear-logo.jpg</file>
+        <file>img/grinn.jpg</file>
     </qresource>
 </RCC>

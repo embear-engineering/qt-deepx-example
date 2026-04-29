@@ -48,13 +48,13 @@ void VideoStreamer::process()
              emit error("InferenceEngine not initialized");
              return;
         }
-        
+
         m_yolo = new Yolo(m_yoloParam);
         if(!m_yolo->LayerReorder(m_ie->GetOutputs())) {
             emit error("Layer reorder failed");
             return;
         }
-        
+
         m_odArgs.yolo = m_yolo;
 
         // Setup buffers
@@ -100,7 +100,7 @@ void VideoStreamer::process()
                 break;
             }
 
-            m_frames[index] = frame.clone(); 
+            m_frames[index] = frame.clone();
 
 #ifdef USE_DXRT
 
@@ -120,16 +120,16 @@ void VideoStreamer::process()
                  std::unique_lock<std::mutex> lk(m_odArgs.lk);
                  if (m_odArgs.od_process_count > m_displayed_count) {
                      int display_idx = m_displayed_count % FRAME_BUFFERS;
-                     
+
                      if (!m_frames[display_idx].empty()) {
                          cv::Mat displayFrame = m_frames[display_idx].clone();
 #ifdef USE_OPENCV
                          DisplayBoundingBox(displayFrame, m_odArgs.od_results[display_idx], m_yoloParam.height, m_yoloParam.width, objectColors, m_yoloParam.postproc_type, true);
 #endif
-                         
+
                          cv::cvtColor(displayFrame, displayFrame, cv::COLOR_BGR2RGB);
                          QImage qimg((const unsigned char*)displayFrame.data, displayFrame.cols, displayFrame.rows, displayFrame.step, QImage::Format_RGB888);
-                         emit imageReady(qimg.copy()); 
+                         emit imageReady(qimg.copy());
                      }
                      m_displayed_count++;
                  }
@@ -139,21 +139,21 @@ void VideoStreamer::process()
                  cv::cvtColor(displayFrame, displayFrame, cv::COLOR_BGR2RGB);
                  QImage qimg((const unsigned char*)displayFrame.data, displayFrame.cols, displayFrame.rows, displayFrame.step, QImage::Format_RGB888);
                  emit imageReady(qimg.copy());
-                 
+
                  // Artificial delay to match typical framerate if no inference
-                 std::this_thread::sleep_for(std::chrono::milliseconds(30)); 
+                 std::this_thread::sleep_for(std::chrono::milliseconds(30));
 #endif
             }
 
             index = (index + 1) % FRAME_BUFFERS;
         }
-#else 
+#else
         // NO OPENCV - Dummy Mode
         int frameNum = 0;
         while (!m_stop) {
             QImage dummy(640, 480, QImage::Format_RGB888);
             dummy.fill(Qt::blue);
-            
+
             QPainter p(&dummy);
             p.setBrush(Qt::red);
             p.drawRect((frameNum * 5) % 640, 200, 50, 50);
@@ -162,14 +162,16 @@ void VideoStreamer::process()
             p.end();
 
             emit imageReady(dummy);
-            
+
             frameNum++;
             std::this_thread::sleep_for(std::chrono::milliseconds(33)); // ~30fps
         }
 #endif
 
+#ifdef USE_DXRT
     } catch (const dxrt::Exception& e) {
         emit error(QString::fromStdString(e.what()));
+#endif
     } catch (const std::exception& e) {
         emit error(QString::fromStdString(e.what()));
     }
