@@ -4,8 +4,7 @@
 VideoStreamItem::VideoStreamItem(QQuickItem *parent)
     : QQuickPaintedItem(parent)
 {
-    // Optimizations?
-    // setRenderTarget(QQuickPaintedItem::FramebufferObject); // Maybe faster?
+    setRenderTarget(QQuickPaintedItem::FramebufferObject);
 }
 
 void VideoStreamItem::paint(QPainter *painter)

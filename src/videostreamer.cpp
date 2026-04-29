@@ -100,7 +100,9 @@ void VideoStreamer::process()
                 break;
             }
 
-            m_frames[index] = frame.clone();
+            // Plain assignment is safe: OpenCV's GStreamer backend uses reference-counted
+            // buffers, so m_frames[index] keeps the buffer alive without an extra copy.
+            m_frames[index] = frame;
 
 #ifdef USE_DXRT
 
@@ -127,9 +129,13 @@ void VideoStreamer::process()
                          DisplayBoundingBox(displayFrame, m_odArgs.od_results[display_idx], m_yoloParam.height, m_yoloParam.width, objectColors, m_yoloParam.postproc_type, true);
 #endif
 
-                         cv::cvtColor(displayFrame, displayFrame, cv::COLOR_BGR2RGB);
-                         QImage qimg((const unsigned char*)displayFrame.data, displayFrame.cols, displayFrame.rows, displayFrame.step, QImage::Format_RGB888);
-                         emit imageReady(qimg.copy());
+                         // Convert BGR→RGB directly into the QImage buffer to avoid
+                         // an intermediate cv::Mat allocation and a qimg.copy() call.
+                         QImage qimg(displayFrame.cols, displayFrame.rows, QImage::Format_RGB888);
+                         cv::Mat rgbWrapper(displayFrame.rows, displayFrame.cols, CV_8UC3,
+                                            qimg.bits(), static_cast<size_t>(qimg.bytesPerLine()));
+                         cv::cvtColor(displayFrame, rgbWrapper, cv::COLOR_BGR2RGB);
+                         emit imageReady(std::move(qimg));
                      }
                      m_displayed_count++;
                  }
