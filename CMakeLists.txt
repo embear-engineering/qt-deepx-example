@@ -22,12 +22,14 @@ set(SOURCES
     src/main.cpp
     src/videostreamer.cpp
     src/videostreamitem.cpp
+    src/systemstats.cpp
     resources/qml.qrc
 )
 
 set(HEADERS
     src/videostreamer.h
     src/videostreamitem.h
+    include/systemstats.h
 )
 
 # OpenCV Configuration

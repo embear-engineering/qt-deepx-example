@@ -9,6 +9,7 @@
 #include <memory>
 #include "videostreamitem.h"
 #include "videostreamer.h"
+#include "systemstats.h"
 #include "debug.h"
 #include <QThread>
 
@@ -20,6 +21,27 @@
 // Definition of the global verbose flag (declared extern in debug.h).
 bool g_verbose = false;
 
+class PeopleCounter : public QObject {
+    Q_OBJECT
+    Q_PROPERTY(int peopleSeen READ peopleSeen NOTIFY peopleSeenChanged)
+public:
+    explicit PeopleCounter(QObject* parent = nullptr) : QObject(parent) {}
+    int peopleSeen() const { return m_count; }
+public slots:
+    void onPeopleSeen(int n) {
+        if (n > m_count) {
+            m_count = n;
+            emit peopleSeenChanged();
+        }
+    }
+signals:
+    void peopleSeenChanged();
+private:
+    int m_count = 0;
+};
+
+#include "main.moc"
+
 int main(int argc, char *argv[])
 {
 #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
@@ -30,7 +52,13 @@ int main(int argc, char *argv[])
     // Register the custom QML type
     qmlRegisterType<VideoStreamItem>("com.deepx.app", 1, 0, "VideoStreamItem");
 
+    SystemStats   systemStats;
+    PeopleCounter peopleCounter;
+
     QQmlApplicationEngine engine;
+    engine.rootContext()->setContextProperty("systemStats",    &systemStats);
+    engine.rootContext()->setContextProperty("peopleCounter",  &peopleCounter);
+
     const QUrl url(QStringLiteral("qrc:/qml/main.qml"));
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated,
                      &app, [url](QObject *obj, const QUrl &objUrl) {
@@ -216,6 +244,7 @@ int main(int argc, char *argv[])
 
                 QObject::connect(thread, &QThread::started, streamer, &VideoStreamer::process);
                 QObject::connect(streamer, &VideoStreamer::imageReady, videoItem, &VideoStreamItem::updateImage);
+                QObject::connect(streamer, &VideoStreamer::peopleSeen, &peopleCounter, &PeopleCounter::onPeopleSeen);
                 QObject::connect(streamer, &VideoStreamer::finished, thread, &QThread::quit);
                 QObject::connect(streamer, &VideoStreamer::finished, streamer, &VideoStreamer::deleteLater);
                 QObject::connect(thread, &QThread::finished, thread, &QThread::deleteLater);

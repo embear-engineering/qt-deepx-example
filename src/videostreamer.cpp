@@ -178,6 +178,12 @@ void VideoStreamer::process()
                                                      (float)m_yoloParam.width,
                                                      (float)m_yoloParam.height);
                              DisplayPersonTracks(displayFrame, m_personTracker->tracks());
+
+                             int seen = m_personTracker->nextId();
+                             if (seen != m_lastEmittedPeopleCount) {
+                                 m_lastEmittedPeopleCount = seen;
+                                 emit peopleSeen(seen);
+                             }
                          }
 #endif
 

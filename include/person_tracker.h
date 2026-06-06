@@ -31,6 +31,7 @@ public:
                                            float modelW, float modelH);
 
     const std::vector<PersonTrack>& tracks() const { return m_tracks; }
+    int nextId() const { return m_nextId; }
 
 private:
     std::string m_modelPath;

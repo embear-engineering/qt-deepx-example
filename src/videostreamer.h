@@ -58,9 +58,10 @@ public slots:
     void process();
 
 signals:
-    void imageReady(QImage image); // Removed streamId as signal, connected directly
+    void imageReady(QImage image);
     void finished();
     void error(QString message);
+    void peopleSeen(int totalCount);
 
 private:
     int m_streamId;
@@ -70,6 +71,7 @@ private:
     bool m_stop;
     int m_displayed_count = 0;
     std::string m_trackerModelPath;
+    int m_lastEmittedPeopleCount = 0;
 
 #ifdef USE_DXRT
     std::shared_ptr<dxrt::InferenceEngine> m_ie;
