@@ -5,6 +5,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
+#include <QFontDatabase>
 #include <iostream>
 #include <memory>
 #include "videostreamitem.h"
@@ -48,6 +49,17 @@ int main(int argc, char *argv[])
     QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
 #endif
     QGuiApplication app(argc, argv);
+
+    // Font diagnostics — always printed to help debug missing-text issues
+    {
+        const char* fontDir = std::getenv("QT_QPA_FONTDIR");
+        std::cerr << "[FONT] QT_QPA_FONTDIR=" << (fontDir ? fontDir : "<not set>") << "\n";
+        QFontDatabase fdb;
+        QStringList families = fdb.families();
+        std::cerr << "[FONT] Available font families: " << families.size() << "\n";
+        for (const QString& f : families)
+            std::cerr << "[FONT]   " << f.toStdString() << "\n";
+    }
 
     // Register the custom QML type
     qmlRegisterType<VideoStreamItem>("com.deepx.app", 1, 0, "VideoStreamItem");

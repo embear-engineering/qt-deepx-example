@@ -98,10 +98,19 @@ Window {
 
             // Status Panel
             Rectangle {
+                id: statusPanel
                 Layout.preferredWidth: 200
                 Layout.fillHeight: true
                 color: "#1a1a2e"
                 radius: 8
+
+                Component.onCompleted: {
+                    console.log("[QML] statusPanel width=" + width + " height=" + height)
+                    console.log("[QML] memTotalMb=" + systemStats.memTotalMb
+                                + " memUsedMb=" + systemStats.memUsedMb
+                                + " cpuLoad=" + systemStats.cpuLoad)
+                    console.log("[QML] Qt.fontFamilies=" + Qt.fontFamilies())
+                }
 
                 ColumnLayout {
                     anchors.fill: parent

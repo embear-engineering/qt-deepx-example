@@ -64,6 +64,10 @@ void SystemStats::update()
                     memAvailable = line.split(' ', Qt::SkipEmptyParts)[1].toLongLong();
                 if (memTotal > 0 && memAvailable > 0) break;
             }
+            std::cerr << "[MEM] raw: MemTotal=" << memTotal
+                      << " kB, MemAvailable=" << memAvailable
+                      << " kB => used=" << (memTotal - memAvailable) / 1024
+                      << " MB, total=" << memTotal / 1024 << " MB\n";
             if (memTotal > 0) {
                 m_memUsedMb  = static_cast<int>((memTotal - memAvailable) / 1024);
                 m_memTotalMb = static_cast<int>(memTotal / 1024);
