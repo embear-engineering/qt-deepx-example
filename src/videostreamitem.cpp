@@ -1,4 +1,5 @@
 #include "videostreamitem.h"
+#include "debug.h"
 #include <QPainter>
 
 VideoStreamItem::VideoStreamItem(QQuickItem *parent)
@@ -31,6 +32,8 @@ void VideoStreamItem::paint(QPainter *painter)
 
 void VideoStreamItem::updateImage(QImage image)
 {
+    DLOG("VideoStreamItem::updateImage " << image.width() << "x" << image.height()
+         << " format=" << image.format());
     {
         QMutexLocker locker(&m_mutex);
         m_image = image;

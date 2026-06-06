@@ -1,4 +1,5 @@
 #include "display.h"
+#include "debug.h"
 #include <utils/color_table.hpp>
 #include <cstdio>
 
@@ -12,6 +13,10 @@ void DisplayBoundingBox(cv::Mat& frame,
                        float InputWidth, 
                        float InputHeight)
 {
+    DLOG("DisplayBoundingBox: " << result.size() << " detection(s)"
+         << " frame=" << frame.cols << "x" << frame.rows
+         << " model=" << (int)OriginWidth << "x" << (int)OriginHeight
+         << " centered=" << ImageCenterAligned);
     std::map<std::string, int> numObjects;
     float x1, y1, x2, y2, w_pad = 0, h_pad = 0;
     float w = (float)frame.cols;  // Target Frame Width
@@ -48,8 +53,12 @@ void DisplayBoundingBox(cv::Mat& frame,
         h_pad = ImageCenterAligned ? (OriginHeight - h*r)/2. : 0;
     }
 
-    for (auto& bbox : result) 
+    DLOG("DisplayBoundingBox: r=" << r << " w_pad=" << w_pad << " h_pad=" << h_pad
+         << " reformatting=" << reformatting);
+
+    for (int bboxIdx = 0; bboxIdx < (int)result.size(); ++bboxIdx)
     {
+        auto& bbox = result[bboxIdx];
         x1 = (bbox.box[0] - w_pad)/r;
         x2 = (bbox.box[2] - w_pad)/r;
         y1 = (bbox.box[1] - h_pad)/r;
@@ -66,6 +75,10 @@ void DisplayBoundingBox(cv::Mat& frame,
         x2 = std::min((float)w, std::max((float)0.0, x2));
         y1 = std::min((float)h, std::max((float)0.0, y1));
         y2 = std::min((float)h, std::max((float)0.0, y2));
+
+        DLOG("DisplayBoundingBox: box[" << bboxIdx << "] '" << bbox.labelname
+             << "' score=" << bbox.score
+             << " at (" << x1 << "," << y1 << ")-(" << x2 << "," << y2 << ")");
 
         // Create label text with score (rounded to 2 decimal places)
         char scoreStr[16];

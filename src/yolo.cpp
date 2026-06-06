@@ -4,6 +4,7 @@
 #include <utils/common_util.hpp>
 #include "yolo.h"
 #include "nms.h"
+#include "debug.h"
 
 // #define DUMP_DATA
 
@@ -33,13 +34,19 @@ Yolo::Yolo() { }
 Yolo::~Yolo() { }
 Yolo::Yolo(YoloParam &_cfg) :cfg(_cfg)
 {
+    DLOG("Yolo::Yolo: numClasses=" << _cfg.numClasses
+         << " numBoxes=" << _cfg.numBoxes
+         << " layers=" << _cfg.layers.size()
+         << " postproc_type=" << static_cast<int>(_cfg.postproc_type));
     if(cfg.layers.empty())
     {
         is_onnx_output = true;
+        DLOG("Yolo::Yolo: using ONNX output path (onnxOutputName='" << cfg.onnxOutputName << "')");
     }
     else
     {
         anchorSize = cfg.layers[0].anchorWidth.size();
+        DLOG("Yolo::Yolo: using layer-based path, anchorSize=" << anchorSize);
     }
     
     if(cfg.numBoxes==0)
@@ -50,6 +57,7 @@ Yolo::Yolo(YoloParam &_cfg) :cfg(_cfg)
             {
                 cfg.numBoxes += layer.numGridX*layer.numGridY*layer.numBoxes;
             }
+            DLOG("Yolo::Yolo: computed numBoxes=" << cfg.numBoxes << " from " << cfg.layers.size() << " layers");
         }
         else
         {
@@ -62,6 +70,7 @@ Yolo::Yolo(YoloParam &_cfg) :cfg(_cfg)
         //allocate memory
         Boxes = std::vector<float>(cfg.numBoxes*4);
         Keypoints = std::vector<float>(cfg.numBoxes*51);
+        DLOG("Yolo::Yolo: allocated Boxes[" << cfg.numBoxes*4 << "] and Keypoints[" << cfg.numBoxes*51 << "]");
     }
     
     for(size_t i=0; i<cfg.numClasses; i++)
@@ -74,12 +83,17 @@ Yolo::Yolo(YoloParam &_cfg) :cfg(_cfg)
 
 bool Yolo::LayerReorder(dxrt::Tensors output_info)
 {
+    DLOG("Yolo::LayerReorder: searching " << output_info.size()
+         << " model outputs for ONNX name '" << cfg.onnxOutputName << "'");
     for(size_t i=0;i<output_info.size();i++)
     {
+        DLOG("Yolo::LayerReorder: output[" << i << "] name='" << output_info[i].name() << "'");
         if(cfg.onnxOutputName == output_info[i].name())
         {
             cfg.numBoxes = output_info.front().shape()[1];
-            std::cout << "cfg.numBoxes: " << cfg.numBoxes << std::endl; 
+            std::cout << "cfg.numBoxes: " << cfg.numBoxes << std::endl;
+            DLOG("Yolo::LayerReorder: matched ONNX output at index " << i
+                 << ", numBoxes=" << cfg.numBoxes);
             onnxOutputIdx.emplace_back(i);
             Boxes.clear();
             Keypoints.clear();
@@ -91,12 +105,15 @@ bool Yolo::LayerReorder(dxrt::Tensors output_info)
     {
         cfg.Show();
         std::cout << "YOLO created : " << cfg.numBoxes << " boxes, " << cfg.numClasses << " classes, "<< std::endl;
+        DLOG("Yolo::LayerReorder: ONNX path complete, clearing layer configs");
         cfg.layers.clear();
         return true;
     }
     
     // Debug print if ONNX name not found
     std::cout << "[DXAPP] [DBG] ONNX output name '" << cfg.onnxOutputName << "' not found in model outputs. Trying layer matching..." << std::endl;
+    DLOG("Yolo::LayerReorder: falling back to layer name matching ("
+         << cfg.layers.size() << " configured layers)");
     
     std::vector<YoloLayerParam> temp;
     for(size_t i=0;i<output_info.size();i++)
@@ -105,6 +122,8 @@ bool Yolo::LayerReorder(dxrt::Tensors output_info)
         {
             if(output_info[i].name() == cfg.layers[j].name)
             {
+                DLOG("Yolo::LayerReorder: matched output[" << i << "] '" << output_info[i].name()
+                     << "' -> layer[" << j << "]");
                 cfg.layers[j].tensorIdx.clear();
                 cfg.layers[j].tensorIdx.push_back(static_cast<int32_t>(i));
                 temp.emplace_back(cfg.layers[j]);
@@ -121,6 +140,7 @@ bool Yolo::LayerReorder(dxrt::Tensors output_info)
              for(auto s : out.shape()) std::cerr << s << ",";
              std::cerr << "])" << std::endl;
         }
+        DLOG("Yolo::LayerReorder: matched " << temp.size() << "/" << output_info.size() << " tensors — FAILED");
         return false;
     }
     if(temp.empty())
@@ -131,6 +151,7 @@ bool Yolo::LayerReorder(dxrt::Tensors output_info)
     cfg.layers.clear();
     cfg.layers = temp;
     cfg.Show();
+    DLOG("Yolo::LayerReorder: layer matching complete, " << cfg.layers.size() << " layers configured");
     return true;
 }
 
@@ -144,6 +165,7 @@ static bool scoreComapre(const std::pair<float, int> &a, const std::pair<float, 
 
 std::vector<BoundingBox> Yolo::PostProc(dxrt::TensorPtrs& dataSrc)
 {
+    DLOG("Yolo::PostProc: " << dataSrc.size() << " input tensor(s)");
     for(uint32_t label=0; label<cfg.numClasses; label++) {
         ScoreIndices[label].clear();
     }
@@ -151,11 +173,14 @@ std::vector<BoundingBox> Yolo::PostProc(dxrt::TensorPtrs& dataSrc)
 
     if(cfg.layers.empty())
     {
+        DLOG("Yolo::PostProc: using ONNX post-processing path");
         for(auto &data:dataSrc)
         {
             if(cfg.onnxOutputName == data->name())
             {
                 auto num_elements = data->shape()[1];
+                DLOG("Yolo::PostProc: found ONNX output '" << cfg.onnxOutputName
+                     << "', num_elements=" << num_elements);
                 onnx_post_processing(dataSrc, num_elements);
                 break;
             }
@@ -163,6 +188,7 @@ std::vector<BoundingBox> Yolo::PostProc(dxrt::TensorPtrs& dataSrc)
     }
     else
     {
+        DLOG("Yolo::PostProc: using raw (layer-based) post-processing path");
         raw_post_processing(dataSrc);
     }
 
@@ -180,6 +206,7 @@ std::vector<BoundingBox> Yolo::PostProc(dxrt::TensorPtrs& dataSrc)
         0
     );
 
+    DLOG("Yolo::PostProc: NMS complete, " << Result.size() << " final detection(s)");
     return Result;
 }
 
@@ -191,16 +218,55 @@ void Yolo::onnx_post_processing(dxrt::TensorPtrs &outputs, int64_t num_elements)
     auto data_pitch_size = outputs[onnxOutputIdx[0]]->shape()[2];
     cv::Mat raw_data;
     int class_index = 5;
+
+    DLOG("Yolo::onnx_post_processing: postproc_type=" << static_cast<int>(cfg.postproc_type)
+         << " num_elements=" << num_elements
+         << " conf_threshold=" << conf_threshold
+         << " score_threshold=" << scoreThreshold);
+
+    if(cfg.postproc_type == PostProcType::YOLOV26)
+    {
+        // End-to-end layout: [1, N, 6] — each row is [x1, y1, x2, y2, confidence, class_id]
+        // Boxes are already in absolute pixel coordinates in x1y1x2y2 format.
+        int64_t n_dets = outputs[onnxOutputIdx[0]]->shape()[1];
+        int64_t stride = outputs[onnxOutputIdx[0]]->shape()[2];  // = 6
+        const float* base = static_cast<const float*>(outputs[onnxOutputIdx[0]]->data());
+        DLOG("Yolo::onnx_post_processing: YOLOV26 path, n_dets=" << n_dets << " stride=" << stride);
+        int accepted = 0;
+        for(int64_t i = 0; i < n_dets; ++i)
+        {
+            const float* det = base + i * stride;
+            float conf = det[4];
+            if(conf < conf_threshold) continue;
+            int cls = static_cast<int>(det[5]);
+            if(cls < 0 || cls >= static_cast<int>(cfg.numClasses)) continue;
+            if(conf >= scoreThreshold)
+            {
+                ScoreIndices[cls].emplace_back(conf, static_cast<int>(i));
+                Boxes[i*4+0] = det[0];  // x1
+                Boxes[i*4+1] = det[1];  // y1
+                Boxes[i*4+2] = det[2];  // x2
+                Boxes[i*4+3] = det[3];  // y2
+                accepted++;
+            }
+        }
+        DLOG("Yolo::onnx_post_processing: YOLOV26 accepted " << accepted << " detections above threshold");
+        return;
+    }
+
     if(cfg.postproc_type == PostProcType::YOLOV8) 
     {
         data_pitch_size = outputs[onnxOutputIdx[0]]->shape()[1];
         num_elements = outputs[onnxOutputIdx[0]]->shape()[2];
+        DLOG("Yolo::onnx_post_processing: YOLOV8 path, pitch=" << data_pitch_size
+             << " num_elements=" << num_elements);
         raw_data = cv::Mat(data_pitch_size, num_elements, CV_32F, (float*)dataSrc);
         raw_data = raw_data.t();
         dataSrc = static_cast<void*>(raw_data.data);
         class_index = 4;
     }
 
+    int accepted = 0;
     for(int boxIdx=0;boxIdx<num_elements;boxIdx++)
     {
         auto *data = static_cast<float*>(dataSrc) + (data_pitch_size * boxIdx);
@@ -226,6 +292,7 @@ void Yolo::onnx_post_processing(dxrt::TensorPtrs &outputs, int64_t num_elements)
             }
             if(max_cls > -1)
             {
+                accepted++;
                 ScoreIndices[max_cls].emplace_back(max_score, boxIdx);
                 Boxes[boxIdx*4+0] = data[x] - data[w] / 2.; /*x1*/
                 Boxes[boxIdx*4+1] = data[y] - data[h] / 2.; /*y1*/
@@ -259,12 +326,15 @@ void Yolo::onnx_post_processing(dxrt::TensorPtrs &outputs, int64_t num_elements)
             else continue;
         }
     }
+    DLOG("Yolo::onnx_post_processing: accepted " << accepted << " candidate detections");
 }
 
 void Yolo::raw_post_processing(dxrt::TensorPtrs &outputs) {
     int boxIdx = 0;
     int x = 0, y = 1, w = 2, h = 3;
     std::vector<float> box_temp(4);
+    DLOG("Yolo::raw_post_processing: postproc_type=" << static_cast<int>(cfg.postproc_type)
+         << " layers=" << cfg.layers.size());
     if(cfg.postproc_type == PostProcType::YOLOV8)
     {
         // 6-output per-scale decoupled head: 3 DFL box regression tensors (cv2, 64ch) and
@@ -289,6 +359,8 @@ void Yolo::raw_post_processing(dxrt::TensorPtrs &outputs) {
         };
         std::sort(reg_tensors.begin(), reg_tensors.end(), sort_desc);
         std::sort(cls_tensors.begin(), cls_tensors.end(), sort_desc);
+        DLOG("Yolo::raw_post_processing: YOLOV8 found " << reg_tensors.size()
+             << " reg tensors and " << cls_tensors.size() << " cls tensors");
 
         for (size_t i = 0; i < 3 && i < reg_tensors.size() && i < cls_tensors.size(); ++i) {
             int reg_idx = reg_tensors[i].second;
@@ -300,6 +372,8 @@ void Yolo::raw_post_processing(dxrt::TensorPtrs &outputs) {
             int W = outputs[cls_idx]->shape()[3];
             int stride = cfg.width / W;
             int num_grid = H * W;
+            DLOG("Yolo::raw_post_processing: YOLOV8 scale[" << i << "] H=" << H
+                 << " W=" << W << " stride=" << stride << " grid=" << num_grid);
 
             for (int gh = 0; gh < H; ++gh) {
                 for (int gw = 0; gw < W; ++gw) {
@@ -449,6 +523,5 @@ void Yolo::raw_post_processing(dxrt::TensorPtrs &outputs) {
             }
         }
     }
-
+    DLOG("Yolo::raw_post_processing: total candidate boxes decoded=" << boxIdx);
 }
-

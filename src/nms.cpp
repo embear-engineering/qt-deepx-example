@@ -1,5 +1,6 @@
 #include <algorithm>
 #include "nms.h"
+#include "debug.h"
 
 static bool compare(BoundingBox &r1, BoundingBox &r2) 
 {
@@ -33,8 +34,12 @@ void NmsOneClass(
     float iou;
     int i, j;
     int numCandidates = ScoreIndices[cls].size();
+    DLOG("NmsOneClass: class=" << cls << " '" << ClassNames[cls]
+         << "' candidates=" << numCandidates
+         << " iouThreshold=" << IouThreshold);
     std::vector<bool> valid(numCandidates);
     std::fill_n(valid.begin(), numCandidates, true);
+    int suppressed = 0;
     for(i=0;i<numCandidates;i++)
     {
         if(!valid[i])
@@ -61,10 +66,14 @@ void NmsOneClass(
                 );
             if(iou>IouThreshold)
             {
+                DLOG("NmsOneClass: suppressing box " << j << " (iou=" << iou << " > " << IouThreshold << ")");
                 valid[j] = false;
+                suppressed++;
             }
         }
     }
+    DLOG("NmsOneClass: class=" << cls << " kept=" << (numCandidates - suppressed)
+         << " suppressed=" << suppressed);
 }
 
 void Nms(
@@ -77,13 +86,20 @@ void Nms(
     int startClass
 )
 {
+    DLOG("Nms: processing classes " << startClass << ".." << (numClass-1)
+         << " iouThreshold=" << IouThreshold
+         << " maxDetections=" << numDetectTotal);
     for(size_t cls=startClass;cls<numClass;cls++)
     {
-        NmsOneClass(cls, ClassNames, ScoreIndices, Boxes, Keypoints, IouThreshold, Result);
+        if(!ScoreIndices[cls].empty()) {
+            NmsOneClass(cls, ClassNames, ScoreIndices, Boxes, Keypoints, IouThreshold, Result);
+        }
     }
     sort(Result.begin(), Result.end(), compare);
     if(numDetectTotal>0 && (int)Result.size()>numDetectTotal)
     {
+        DLOG("Nms: trimming results from " << Result.size() << " to " << numDetectTotal);
         Result.resize(numDetectTotal);
     }
+    DLOG("Nms: final result count=" << Result.size());
 }

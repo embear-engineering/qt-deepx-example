@@ -1,18 +1,24 @@
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
 #include <iostream>
 #include <memory>
 #include "videostreamitem.h"
 #include "videostreamer.h"
+#include "debug.h"
 #include <QThread>
 
 #ifdef USE_DXRT
 #include "yolo.h"
-// Extern declaration, definition is in yolo_cfg.cpp to ensure correct initialization order
-extern std::vector<YoloParam> yoloParams;
 #include <dxrt/exception/exception.h>
 #endif
+
+// Definition of the global verbose flag (declared extern in debug.h).
+bool g_verbose = false;
 
 int main(int argc, char *argv[])
 {
@@ -35,49 +41,97 @@ int main(int argc, char *argv[])
 
     // Argument Parsing
     QStringList args = app.arguments();
+    std::string modelPath;
+    std::string labelsPath;
+    std::vector<std::string> pipelines;
+    float scoreThreshold = 0.25f;
+    float nmsThreshold = 0.45f;
+
+    for (int i = 1; i < args.size(); ++i) {
+        QString arg = args[i];
+        if (arg == "-v") {
+            g_verbose = true;
+            std::cerr << "[DBG] Verbose mode enabled\n";
+        } else if (arg == "--labels" && i + 1 < args.size()) {
+            labelsPath = args[++i].toStdString();
+            DLOG("Parsed --labels: " << labelsPath);
+        } else if (arg == "--score-threshold" && i + 1 < args.size()) {
+            scoreThreshold = args[++i].toFloat();
+            DLOG("Parsed --score-threshold: " << scoreThreshold);
+        } else if (arg == "--nms-threshold" && i + 1 < args.size()) {
+            nmsThreshold = args[++i].toFloat();
+            DLOG("Parsed --nms-threshold: " << nmsThreshold);
+        } else if (modelPath.empty()) {
+            modelPath = arg.toStdString();
+            DLOG("Parsed model path: " << modelPath);
+        } else {
+            pipelines.push_back(arg.toStdString());
+            DLOG("Parsed pipeline: " << pipelines.back());
+        }
+    }
+
+    DLOG("Argument summary:"
+         << " model=" << (modelPath.empty() ? "<none>" : modelPath)
+         << " labels=" << (labelsPath.empty() ? "<none>" : labelsPath)
+         << " pipelines=" << pipelines.size()
+         << " score_threshold=" << scoreThreshold
+         << " nms_threshold=" << nmsThreshold);
+
 #ifdef USE_DXRT
-    if (args.size() < 4) {
-        std::cerr << "Usage: " << args[0].toStdString() << " <model_path> <profile_index> <pipeline1> [pipeline2]" << std::endl;
-        std::cerr << "Profile Index Mapping:" << std::endl;
-        std::cerr << "0: yolov5s_320\n1: yolov5s_512\n2: yolov5s_640\n3: yolov7_512\n4: yolov7_640\n5: yolov8_640\n6: yolox_s_512\n7: yolov5s_face_640\n8: yolov3_512\n9: yolov4_416\n10: yolov9_640" << std::endl;
+    if (modelPath.empty() || labelsPath.empty() || pipelines.empty()) {
+        std::cerr << "Usage: " << args[0].toStdString()
+                  << " <model_path> --labels <labels.json> <pipeline1> [pipeline2]"
+                  << " [--score-threshold N] [--nms-threshold N] [-v]" << std::endl;
         return -1;
     }
 #else
-    // If no DXRT, we might not need model/profile, but let's keep signature or allow dummy
-    if (args.size() < 2) {
-        // Allow running with just a dummy pipeline arg or defaults if testing UI
-        // But to be consistent:
-        // ./app dummy_model 0 pipeline1
-    }
+    if (modelPath.empty()) modelPath = "dummy_model";
 #endif
 
-    std::string modelPath = (args.size() > 1) ? args[1].toStdString() : "dummy_model";
-    int profileIndex = (args.size() > 2) ? args[2].toInt() : 0;
-    std::vector<std::string> pipelines;
-    if (args.size() > 3) pipelines.push_back(args[3].toStdString());
-    if (args.size() > 4) pipelines.push_back(args[4].toStdString());
-
-    // If testing UI without args, add a dummy pipeline
     if (pipelines.empty()) {
         pipelines.push_back("dummy_pipeline");
     }
 
     YoloParam param;
 #ifdef USE_DXRT
-    if (profileIndex >= 0 && profileIndex < yoloParams.size()) {
-        param = yoloParams[profileIndex];
-    } else {
-        std::cerr << "Invalid profile index" << std::endl;
-        // fallback to 0
-        if(!yoloParams.empty()) param = yoloParams[0];
+    // Load labels from JSON
+    std::vector<std::string> labels;
+    {
+        DLOG("Loading labels from: " << labelsPath);
+        QFile file(QString::fromStdString(labelsPath));
+        if (!file.open(QIODevice::ReadOnly)) {
+            std::cerr << "Failed to open labels file: " << labelsPath << std::endl;
+            return -1;
+        }
+        QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+        if (doc.isNull() || !doc.isObject()) {
+            std::cerr << "Invalid JSON in labels file: " << labelsPath << std::endl;
+            return -1;
+        }
+        QJsonArray arr = doc.object()["labels"].toArray();
+        if (arr.isEmpty()) {
+            std::cerr << "No 'labels' array found in: " << labelsPath << std::endl;
+            return -1;
+        }
+        for (const QJsonValue& v : arr) {
+            labels.push_back(v.toString().toStdString());
+        }
+        DLOG("Loaded " << labels.size() << " labels");
     }
+    param = createYolo26xParam(labels, scoreThreshold, nmsThreshold);
+    DLOG("YoloParam created: width=" << param.width << " height=" << param.height
+         << " numClasses=" << param.numClasses
+         << " scoreThreshold=" << param.scoreThreshold
+         << " iouThreshold=" << param.iouThreshold);
 #else
     param.width = 640;
-    param.height = 480;
+    param.height = 640;
+    DLOG("Using dummy YoloParam: width=" << param.width << " height=" << param.height);
 #endif
 
     // Connect to QML Items
     QObject* root = engine.rootObjects().first();
+    DLOG("Root QML object: " << (root ? root->metaObject()->className() : "<null>"));
 
     // Manage threads so they don't go out of scope
     std::vector<QThread*> threads;
@@ -86,9 +140,11 @@ int main(int argc, char *argv[])
 #ifdef USE_DXRT
     dxrt::InferenceOption op_od;
     op_od.devices.push_back(0);
+    DLOG("Creating InferenceEngine: model=" << modelPath << " device=0");
     std::shared_ptr<dxrt::InferenceEngine> ie;
     try {
         ie = std::make_shared<dxrt::InferenceEngine>(modelPath, op_od);
+        DLOG("InferenceEngine created successfully");
     } catch (const dxrt::Exception& e) {
         std::cerr << "Failed to initialize InferenceEngine: " << e.what() << std::endl;
         return -1;
@@ -115,7 +171,10 @@ int main(int argc, char *argv[])
                 index = 0;
             }
 
+            DLOG("Callback: running PostProc on buffer index " << index
+                 << " (process_count=" << arguments->od_process_count << ")");
             auto od_result = arguments->yolo->PostProc(outputs);
+            DLOG("Callback: PostProc returned " << od_result.size() << " detections");
             arguments->od_results[index] = od_result;
             arguments->od_process_count = arguments->od_process_count + 1;
             arguments->frame_idx = arguments->frame_idx + 1;
@@ -123,20 +182,24 @@ int main(int argc, char *argv[])
         return 0;
     };
     ie->RegisterCallback(od_postProcCallBack);
+    DLOG("Post-processing callback registered");
 #endif
 
     for (size_t i = 0; i < pipelines.size(); ++i) {
         if (i > 1) break; // Only 2 streams supported in QML currently
 
         QString objectName = QString("stream%1").arg(i);
+        DLOG("Looking for QML item: " << objectName.toStdString());
         QObject* item = root->findChild<QObject*>(objectName);
 
         if (item) {
+            DLOG("Found QML item: " << objectName.toStdString());
             // Make visible
             item->setProperty("visible", true);
             VideoStreamItem* videoItem = qobject_cast<VideoStreamItem*>(item);
 
             if (videoItem) {
+                DLOG("Creating VideoStreamer for stream " << i << ": pipeline=" << pipelines[i]);
                 QThread* thread = new QThread;
 #ifdef USE_DXRT
                 VideoStreamer* streamer = new VideoStreamer(i, ie, modelPath, param, pipelines[i]);
@@ -146,8 +209,6 @@ int main(int argc, char *argv[])
                 streamer->moveToThread(thread);
 
                 QObject::connect(thread, &QThread::started, streamer, &VideoStreamer::process);
-                // Direct connection might be unsafe across threads for complex types,
-                // but QImage is implicitly shared and registered. QueuedConnection is default for cross-thread.
                 QObject::connect(streamer, &VideoStreamer::imageReady, videoItem, &VideoStreamItem::updateImage);
                 QObject::connect(streamer, &VideoStreamer::finished, thread, &QThread::quit);
                 QObject::connect(streamer, &VideoStreamer::finished, streamer, &VideoStreamer::deleteLater);
@@ -156,6 +217,9 @@ int main(int argc, char *argv[])
                 threads.push_back(thread);
                 streamers.push_back(streamer);
                 thread->start();
+                DLOG("Thread started for stream " << i);
+            } else {
+                DLOG("QML item " << objectName.toStdString() << " is not a VideoStreamItem");
             }
         } else {
             std::cerr << "Could not find QML item: " << objectName.toStdString() << std::endl;
@@ -165,11 +229,14 @@ int main(int argc, char *argv[])
     int ret = app.exec();
 
     // Cleanup
+    DLOG("Stopping " << streamers.size() << " streamer(s)");
     for(auto s : streamers) s->stop();
+    DLOG("Waiting for " << threads.size() << " thread(s) to finish");
     for(auto t : threads) {
         t->quit();
         t->wait();
     }
+    DLOG("Cleanup complete, exiting with code " << ret);
 
     return ret;
 }

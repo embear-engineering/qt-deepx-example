@@ -14,7 +14,8 @@ enum class PostProcType
     OD = 0,
     POSE,
     FACE,
-    YOLOV8
+    YOLOV8,
+    YOLOV26
 };
 
 struct YoloLayerParam
@@ -93,6 +94,11 @@ struct YoloParam
     // Display configuration info
     void Show();
 };
+
+// Factory function for Yolo26x model configuration
+YoloParam createYolo26xParam(const std::vector<std::string>& classNames,
+                             float scoreThreshold = 0.25f,
+                             float nmsThreshold = 0.45f);
 
 class Yolo
 {
