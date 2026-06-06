@@ -171,9 +171,7 @@ Window {
                             radius: 3
                             color: "#333355"
                             Rectangle {
-                                width: systemStats.memTotalMb > 0
-                                       ? parent.width * Math.min(systemStats.memUsedMb / systemStats.memTotalMb, 1.0)
-                                       : 0
+                                width: parent.width * Math.min(systemStats.memUsedMb / Math.max(1, systemStats.memTotalMb), 1.0)
                                 height: parent.height
                                 radius: parent.radius
                                 color: "#69ff47"
