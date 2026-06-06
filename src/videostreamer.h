@@ -11,6 +11,7 @@
 
 #ifdef USE_OPENCV
 #include <opencv2/opencv.hpp>
+#include "person_tracker.h"
 #endif
 
 #ifdef USE_DXRT
@@ -45,9 +46,9 @@ class VideoStreamer : public QObject
     Q_OBJECT
 public:
 #ifdef USE_DXRT
-    explicit VideoStreamer(int streamId, std::shared_ptr<dxrt::InferenceEngine> ie, const std::string& modelPath, const YoloParam& yoloParam, const std::string& pipeline, QObject *parent = nullptr);
+    explicit VideoStreamer(int streamId, std::shared_ptr<dxrt::InferenceEngine> ie, const std::string& modelPath, const YoloParam& yoloParam, const std::string& pipeline, const std::string& trackerModelPath = "", QObject *parent = nullptr);
 #else
-    explicit VideoStreamer(int streamId, const std::string& modelPath, const YoloParam& yoloParam, const std::string& pipeline, QObject *parent = nullptr);
+    explicit VideoStreamer(int streamId, const std::string& modelPath, const YoloParam& yoloParam, const std::string& pipeline, const std::string& trackerModelPath = "", QObject *parent = nullptr);
 #endif
     ~VideoStreamer();
 
@@ -68,6 +69,7 @@ private:
     std::string m_pipeline;
     bool m_stop;
     int m_displayed_count = 0;
+    std::string m_trackerModelPath;
 
 #ifdef USE_DXRT
     std::shared_ptr<dxrt::InferenceEngine> m_ie;
@@ -81,6 +83,7 @@ private:
 #ifdef USE_OPENCV
     cv::Mat m_frames[FRAME_BUFFERS];
     std::vector<cv::Mat> m_odInputs;
+    std::unique_ptr<PersonTracker> m_personTracker;
 #endif
     std::vector<std::vector<uint8_t>> m_odOutputs;
 };

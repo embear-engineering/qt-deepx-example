@@ -14,12 +14,12 @@
 #endif
 
 #ifdef USE_DXRT
-VideoStreamer::VideoStreamer(int streamId, std::shared_ptr<dxrt::InferenceEngine> ie, const std::string& modelPath, const YoloParam& yoloParam, const std::string& pipeline, QObject *parent)
-    : QObject(parent), m_streamId(streamId), m_ie(ie), m_modelPath(modelPath), m_yoloParam(yoloParam), m_pipeline(pipeline), m_stop(false)
+VideoStreamer::VideoStreamer(int streamId, std::shared_ptr<dxrt::InferenceEngine> ie, const std::string& modelPath, const YoloParam& yoloParam, const std::string& pipeline, const std::string& trackerModelPath, QObject *parent)
+    : QObject(parent), m_streamId(streamId), m_ie(ie), m_modelPath(modelPath), m_yoloParam(yoloParam), m_pipeline(pipeline), m_stop(false), m_trackerModelPath(trackerModelPath)
       , m_yolo(nullptr)
 #else
-VideoStreamer::VideoStreamer(int streamId, const std::string& modelPath, const YoloParam& yoloParam, const std::string& pipeline, QObject *parent)
-    : QObject(parent), m_streamId(streamId), m_modelPath(modelPath), m_yoloParam(yoloParam), m_pipeline(pipeline), m_stop(false)
+VideoStreamer::VideoStreamer(int streamId, const std::string& modelPath, const YoloParam& yoloParam, const std::string& pipeline, const std::string& trackerModelPath, QObject *parent)
+    : QObject(parent), m_streamId(streamId), m_modelPath(modelPath), m_yoloParam(yoloParam), m_pipeline(pipeline), m_stop(false), m_trackerModelPath(trackerModelPath)
 #endif
 {
     m_odOutputs.resize(FRAME_BUFFERS);
@@ -108,6 +108,17 @@ void VideoStreamer::process()
         DLOG("VideoStreamer[" << m_streamId << "] Pipeline opened successfully"
              << " (backend=" << cap.getBackendName().c_str() << ")");
 
+#ifdef USE_DXRT
+        if (!m_trackerModelPath.empty()) {
+            m_personTracker = std::unique_ptr<PersonTracker>(
+                new PersonTracker(m_trackerModelPath));
+            DLOG("VideoStreamer[" << m_streamId << "] PersonTracker initialised: "
+                 << m_trackerModelPath);
+        } else {
+            DLOG("VideoStreamer[" << m_streamId << "] No tracker model path – tracking disabled");
+        }
+#endif
+
         int index = 0;
 #ifdef USE_DXRT
         auto objectColors = dxapp::common::color_table;
@@ -157,6 +168,17 @@ void VideoStreamer::process()
                          cv::Mat displayFrame = m_frames[display_idx].clone();
 #ifdef USE_OPENCV
                          DisplayBoundingBox(displayFrame, m_odArgs.od_results[display_idx], m_yoloParam.height, m_yoloParam.width, objectColors, m_yoloParam.postproc_type, true);
+
+                         if (m_personTracker) {
+                             std::vector<BoundingBox> personDets;
+                             for (const auto& bb : m_odArgs.od_results[display_idx])
+                                 if (bb.label == 0) personDets.push_back(bb);
+                             // Update tracker using the raw (unmodified) stored frame.
+                             m_personTracker->update(personDets, m_frames[display_idx],
+                                                     (float)m_yoloParam.width,
+                                                     (float)m_yoloParam.height);
+                             DisplayPersonTracks(displayFrame, m_personTracker->tracks());
+                         }
 #endif
 
                          // Convert BGR→RGB directly into the QImage buffer to avoid

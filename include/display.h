@@ -16,6 +16,8 @@
 #include <condition_variable>
 #include "bbox.h"
 #include "yolo.h"
+#include "person_tracker.h"
+
 void DisplayBoundingBox(cv::Mat& frame, 
                        std::vector<BoundingBox>& result, 
                        float OriginHeight, 
@@ -25,3 +27,7 @@ void DisplayBoundingBox(cv::Mat& frame,
                        bool ImageCenterAligned=false, 
                        float InputWidth=0.f, 
                        float InputHeight=0.f);
+
+// Overlay person tracks on frame. Each active track is drawn with a distinct
+// green rectangle and a persistent "ID: N" label.
+void DisplayPersonTracks(cv::Mat& frame, const std::vector<PersonTrack>& tracks);

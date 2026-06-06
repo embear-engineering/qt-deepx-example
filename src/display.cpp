@@ -2,7 +2,6 @@
 #include "debug.h"
 #include <utils/color_table.hpp>
 #include <cstdio>
-
 void DisplayBoundingBox(cv::Mat& frame, 
                        std::vector<BoundingBox>& result, 
                        float OriginHeight, 
@@ -149,5 +148,39 @@ void DisplayBoundingBox(cv::Mat& frame,
                 cv::circle(frame, points[index], 3, dxapp::common::pose_kpt_color[index], -1, cv::LINE_AA);
             }
         }
+    }
+}
+
+void DisplayPersonTracks(cv::Mat& frame, const std::vector<PersonTrack>& tracks)
+{
+    static const cv::Scalar trackColor(0, 220, 0); // bright green
+
+    for (const auto& track : tracks) {
+        const cv::Rect2d& roi = track.roi;
+        if (roi.width <= 0 || roi.height <= 0) continue;
+
+        cv::Rect rect(static_cast<int>(roi.x), static_cast<int>(roi.y),
+                      static_cast<int>(roi.width), static_cast<int>(roi.height));
+
+        // Draw tracking rectangle (thicker than detection box to visually distinguish it).
+        cv::rectangle(frame, rect, trackColor, 2);
+
+        std::string label = "ID: " + std::to_string(track.id);
+        int baseline = 0;
+        auto textSize = cv::getTextSize(label, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseline);
+
+        cv::Point textOrg(rect.x, rect.y - 4);
+        if (textOrg.y < textSize.height) textOrg.y = rect.y + textSize.height + 4;
+
+        cv::rectangle(frame,
+                      cv::Point(textOrg.x, textOrg.y - textSize.height),
+                      cv::Point(textOrg.x + textSize.width, textOrg.y),
+                      trackColor, cv::FILLED);
+        cv::putText(frame, label, textOrg,
+                    cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0), 1, cv::LINE_AA);
+
+        DLOG("DisplayPersonTracks: track " << track.id
+             << " at (" << rect.x << "," << rect.y << " "
+             << rect.width << "x" << rect.height << ")");
     }
 }

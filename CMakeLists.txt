@@ -72,6 +72,7 @@ if(ENABLE_OPENCV AND ENABLE_DXRT)
     list(APPEND SOURCES
         src/display.cpp
         src/image.cpp
+        src/person_tracker.cpp
     )
 endif()
 

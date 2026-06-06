@@ -43,6 +43,7 @@ int main(int argc, char *argv[])
     QStringList args = app.arguments();
     std::string modelPath;
     std::string labelsPath;
+    std::string trackerModelPath;
     std::vector<std::string> pipelines;
     float scoreThreshold = 0.25f;
     float nmsThreshold = 0.45f;
@@ -55,6 +56,9 @@ int main(int argc, char *argv[])
         } else if (arg == "--labels" && i + 1 < args.size()) {
             labelsPath = args[++i].toStdString();
             DLOG("Parsed --labels: " << labelsPath);
+        } else if (arg == "--tracker-model" && i + 1 < args.size()) {
+            trackerModelPath = args[++i].toStdString();
+            DLOG("Parsed --tracker-model: " << trackerModelPath);
         } else if (arg == "--score-threshold" && i + 1 < args.size()) {
             scoreThreshold = args[++i].toFloat();
             DLOG("Parsed --score-threshold: " << scoreThreshold);
@@ -73,6 +77,7 @@ int main(int argc, char *argv[])
     DLOG("Argument summary:"
          << " model=" << (modelPath.empty() ? "<none>" : modelPath)
          << " labels=" << (labelsPath.empty() ? "<none>" : labelsPath)
+         << " tracker=" << (trackerModelPath.empty() ? "<none>" : trackerModelPath)
          << " pipelines=" << pipelines.size()
          << " score_threshold=" << scoreThreshold
          << " nms_threshold=" << nmsThreshold);
@@ -81,6 +86,7 @@ int main(int argc, char *argv[])
     if (modelPath.empty() || labelsPath.empty() || pipelines.empty()) {
         std::cerr << "Usage: " << args[0].toStdString()
                   << " <model_path> --labels <labels.json> <pipeline1> [pipeline2]"
+                  << " [--tracker-model <vitTracker.onnx>]"
                   << " [--score-threshold N] [--nms-threshold N] [-v]" << std::endl;
         return -1;
     }
@@ -202,9 +208,9 @@ int main(int argc, char *argv[])
                 DLOG("Creating VideoStreamer for stream " << i << ": pipeline=" << pipelines[i]);
                 QThread* thread = new QThread;
 #ifdef USE_DXRT
-                VideoStreamer* streamer = new VideoStreamer(i, ie, modelPath, param, pipelines[i]);
+                VideoStreamer* streamer = new VideoStreamer(i, ie, modelPath, param, pipelines[i], trackerModelPath);
 #else
-                VideoStreamer* streamer = new VideoStreamer(i, modelPath, param, pipelines[i]);
+                VideoStreamer* streamer = new VideoStreamer(i, modelPath, param, pipelines[i], trackerModelPath);
 #endif
                 streamer->moveToThread(thread);
 
