@@ -2,6 +2,7 @@
 #include "debug.h"
 #include <QFile>
 #include <QTextStream>
+#include <cstdio>
 
 SystemStats::SystemStats(QObject* parent)
     : QObject(parent)
@@ -50,20 +51,22 @@ void SystemStats::update()
         }
     }
 
-    // --- Memory from /proc/meminfo ---
+    // --- Memory from /proc/meminfo (POSIX I/O — QTextStream unreliable on /proc) ---
     {
-        QFile f("/proc/meminfo");
-        if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            QTextStream in(&f);
+        FILE* fp = fopen("/proc/meminfo", "r");
+        if (fp) {
+            char line[256];
             long long memTotal = 0, memAvailable = 0;
-            while (!in.atEnd()) {
-                QString line = in.readLine();
-                if (line.startsWith("MemTotal:"))
-                    memTotal = line.split(' ', Qt::SkipEmptyParts)[1].toLongLong();
-                else if (line.startsWith("MemAvailable:"))
-                    memAvailable = line.split(' ', Qt::SkipEmptyParts)[1].toLongLong();
-                if (memTotal > 0 && memAvailable > 0) break;
+            while (fgets(line, sizeof(line), fp)) {
+                long long val = 0;
+                if (sscanf(line, "MemTotal: %lld", &val) == 1)
+                    memTotal = val;
+                else if (sscanf(line, "MemAvailable: %lld", &val) == 1)
+                    memAvailable = val;
+                if (memTotal > 0 && memAvailable > 0)
+                    break;
             }
+            fclose(fp);
             std::cerr << "[MEM] raw: MemTotal=" << memTotal
                       << " kB, MemAvailable=" << memAvailable
                       << " kB => used=" << (memTotal - memAvailable) / 1024
