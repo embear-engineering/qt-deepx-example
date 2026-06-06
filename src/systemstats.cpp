@@ -62,16 +62,12 @@ void SystemStats::update()
                     memTotal = line.split(' ', Qt::SkipEmptyParts)[1].toLongLong();
                 else if (line.startsWith("MemAvailable:"))
                     memAvailable = line.split(' ', Qt::SkipEmptyParts)[1].toLongLong();
-                if (memTotal && memAvailable) break;
+                if (memTotal > 0 && memAvailable > 0) break;
             }
             if (memTotal > 0) {
-                int newUsed  = static_cast<int>((memTotal - memAvailable) / 1024);
-                int newTotal = static_cast<int>(memTotal / 1024);
-                if (newUsed != m_memUsedMb || newTotal != m_memTotalMb) {
-                    m_memUsedMb  = newUsed;
-                    m_memTotalMb = newTotal;
-                    emit memChanged();
-                }
+                m_memUsedMb  = static_cast<int>((memTotal - memAvailable) / 1024);
+                m_memTotalMb = static_cast<int>(memTotal / 1024);
+                emit memChanged();
             }
         } else {
             DLOG("SystemStats: cannot open /proc/meminfo");

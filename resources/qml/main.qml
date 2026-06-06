@@ -117,10 +117,15 @@ Window {
                     }
 
                     // CPU Load
-                    ColumnLayout {
+                    Column {
                         spacing: 4
                         Layout.fillWidth: true
-                        Text { text: "CPU Load"; color: "#888888"; font.pixelSize: 11 }
+                        Text {
+                            text: "CPU Load"
+                            color: "#aaaaaa"
+                            font.pixelSize: 12
+                            width: parent.width
+                        }
                         Text {
                             text: systemStats.cpuLoad.toFixed(1) + " %"
                             color: "#00e5ff"
@@ -128,7 +133,7 @@ Window {
                             font.bold: true
                         }
                         Rectangle {
-                            Layout.fillWidth: true
+                            width: parent.width
                             height: 6
                             radius: 3
                             color: "#333355"
@@ -143,46 +148,56 @@ Window {
                     }
 
                     // Memory Usage
-                    ColumnLayout {
+                    Column {
                         spacing: 4
                         Layout.fillWidth: true
-                        Text { text: "Memory"; color: "#888888"; font.pixelSize: 11 }
+                        Text {
+                            text: "Memory"
+                            color: "#aaaaaa"
+                            font.pixelSize: 12
+                            width: parent.width
+                        }
                         Text {
                             text: systemStats.memUsedMb + " / " + systemStats.memTotalMb + " MB"
                             color: "#69ff47"
                             font.pixelSize: 16
                             font.bold: true
+                            width: parent.width
                             wrapMode: Text.WordWrap
-                            Layout.fillWidth: true
                         }
                         Rectangle {
-                            Layout.fillWidth: true
+                            width: parent.width
                             height: 6
                             radius: 3
                             color: "#333355"
                             Rectangle {
                                 width: systemStats.memTotalMb > 0
-                                       ? parent.width * (systemStats.memUsedMb / systemStats.memTotalMb)
+                                       ? parent.width * Math.min(systemStats.memUsedMb / systemStats.memTotalMb, 1.0)
                                        : 0
                                 height: parent.height
                                 radius: parent.radius
                                 color: "#69ff47"
-                                Behavior on width { SmoothedAnimation { duration: 400 } }
                             }
                         }
                     }
 
                     // People seen counter
-                    ColumnLayout {
+                    Column {
                         spacing: 4
                         Layout.fillWidth: true
-                        Text { text: "People Seen"; color: "#888888"; font.pixelSize: 11 }
+                        Text {
+                            text: "People Seen"
+                            color: "#aaaaaa"
+                            font.pixelSize: 12
+                            width: parent.width
+                        }
                         Text {
                             text: peopleCounter.peopleSeen
                             color: "#ffd740"
                             font.pixelSize: 40
                             font.bold: true
-                            Layout.alignment: Qt.AlignHCenter
+                            width: parent.width
+                            horizontalAlignment: Text.AlignHCenter
                         }
                     }
 
